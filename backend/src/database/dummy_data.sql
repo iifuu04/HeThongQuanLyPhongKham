@@ -1,23 +1,5 @@
 USE MedSys;
 
-SET FOREIGN_KEY_CHECKS = 0;
-
-DELETE FROM Audit_Logs;
-DELETE FROM Bill_Items;
-DELETE FROM Bills;
-DELETE FROM Medical_Records;
-DELETE FROM Appointment_Request;
-DELETE FROM Appointments;
-DELETE FROM Work_Schedules;
-DELETE FROM Patients;
-DELETE FROM Doctors;
-DELETE FROM Services;
-DELETE FROM Shifts;
-DELETE FROM Clinics;
-DELETE FROM Specialties;
-DELETE FROM Profiles;
-
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- 1) Profiles (54 rows)
 INSERT INTO Profiles (
