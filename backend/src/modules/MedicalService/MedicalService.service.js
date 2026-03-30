@@ -1,0 +1,1 @@
+// MedicalService.service.js

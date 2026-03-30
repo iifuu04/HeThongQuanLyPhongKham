@@ -1,0 +1,1 @@
+// MedicalRecord.service.js

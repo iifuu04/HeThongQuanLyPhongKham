@@ -1,0 +1,1 @@
+// Specialty.validator.js

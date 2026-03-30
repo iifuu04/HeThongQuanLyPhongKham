@@ -1,0 +1,1 @@
+// MedicalService.routes.js

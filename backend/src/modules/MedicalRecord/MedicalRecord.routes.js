@@ -1,0 +1,1 @@
+// MedicalRecord.routes.js

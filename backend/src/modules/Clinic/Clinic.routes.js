@@ -1,0 +1,1 @@
+// Clinic.routes.js
