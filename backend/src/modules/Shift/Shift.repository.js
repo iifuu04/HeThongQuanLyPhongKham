@@ -1,14 +1,14 @@
 // Shift.repository.js
-import db from './../../config/db.js'
+import db from '../../config/db.js';
 
-class Shift {
+class ShiftRepository {
     static async createShift(shift) {
-        const {start_time, end_time, max_patients} = shift;
+        const { start_time, end_time, max_patients } = shift;
 
         const [result] = await db.execute(
-            `INSERT INTO Shifts (start_time, end_time, max_patients, created_at, updated_at)
-            VALUES (?, ?, ?, NOW(), NOW())`,
-            [start_time, end_time, max_patients]
+            `INSERT INTO Shifts (start_time, end_time, max_patients)
+            VALUES (?, ?, ?)`,
+            [start_time, end_time, max_patients || 20]
         );
 
         return result.affectedRows > 0;
@@ -18,10 +18,12 @@ class Shift {
         const fields = [];
         const values = [];
 
+        // Only allow updating these fields - Shifts has start_time, end_time, max_patients
+        const allowedFields = ['start_time', 'end_time', 'max_patients'];
         for (const [key, value] of Object.entries(shift)) {
-            if (value !== undefined) {
+            if (allowedFields.includes(key) && key !== 'id' && key !== 'created_at' && key !== 'updated_at') {
                 fields.push(`${key} = ?`);
-                values.push(value)
+                values.push(value);
             }
         }
 
@@ -29,20 +31,21 @@ class Shift {
 
         const sql = `
             UPDATE Shifts
-            SET updated_at = NOW(), ${fields.join(', ')}
+            SET ${fields.join(', ')}
             WHERE id = ?
         `;
 
         values.push(id);
 
-        const [result] = await db.execute(sql, values)
+        const [result] = await db.execute(sql, values);
 
         return result.affectedRows > 0;
     }
 
     static async deleteShift(id) {
         const [result] = await db.execute(
-            `DELETE FROM Shifts WHERE id = ?`, [id]
+            `DELETE FROM Shifts WHERE id = ?`,
+            [id]
         );
 
         return result.affectedRows > 0;
@@ -50,7 +53,8 @@ class Shift {
 
     static async getShiftById(id) {
         const [result] = await db.execute(
-            `SELECT * FROM Shifts WHERE id = ?`, [id]
+            `SELECT * FROM Shifts WHERE id = ?`,
+            [id]
         );
 
         return result.length > 0 ? result[0] : null;
@@ -58,11 +62,29 @@ class Shift {
 
     static async getShifts() {
         const [result] = await db.execute(
-            `SELECT * FROM Shifts`
+            `SELECT * FROM Shifts ORDER BY start_time`
         );
 
-        return result.length > 0 ? result : null;
+        return result.length > 0 ? result : [];
+    }
+
+    static async getShiftByTime(startTime, endTime) {
+        const [result] = await db.execute(
+            `SELECT * FROM Shifts WHERE start_time = ? AND end_time = ?`,
+            [startTime, endTime]
+        );
+
+        return result.length > 0 ? result[0] : null;
+    }
+
+    static async hasLinkedSchedules(shiftId) {
+        const [result] = await db.execute(
+            `SELECT COUNT(*) as count FROM Work_Schedules WHERE shift_id = ?`,
+            [shiftId]
+        );
+
+        return result[0].count > 0;
     }
 }
 
-export default Shift;
+export default ShiftRepository;

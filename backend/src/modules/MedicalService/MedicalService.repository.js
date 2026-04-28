@@ -1,25 +1,26 @@
 // MedicalService.repository.js
-import db from './../../config/db.js'
+import db from '../../config/db.js';
 
-class MedicalService {
+class MedicalServiceRepository {
     static async createService(service) {
-        const {name, price} = service;
+        const { name, price, description } = service;
 
         const [result] = await db.execute(
             `INSERT INTO Services (name, price)
-            VALUES (?, ?)`,
-            [name, price]
+             VALUES (?, ?)`,
+            [name, price || 0]
         );
 
         return result.affectedRows > 0;
     }
 
     static async updateService(id, service) {
+        const allowedFields = ['name', 'price'];
         const fields = [];
         const values = [];
 
         for (const [key, value] of Object.entries(service)) {
-            if (value !== undefined) {
+            if (allowedFields.includes(key) && value !== undefined) {
                 fields.push(`${key} = ?`);
                 values.push(value);
             }
@@ -27,11 +28,8 @@ class MedicalService {
 
         if (fields.length === 0) return false;
 
-        const sql = `
-            UPDATE Services 
-            SET ${fields.join(', ')}
-            WHERE id = ?
-        `;
+        const sql = `UPDATE Services SET ${fields.join(', ')} WHERE id = ?`;
+        values.push(id);
 
         const [result] = await db.execute(sql, values);
 
@@ -40,27 +38,42 @@ class MedicalService {
 
     static async deleteService(id) {
         const [result] = await db.execute(
-            `DELETE FROM Services WHERE id = ?`, [id]
+            `DELETE FROM Services WHERE id = ?`,
+            [id]
         );
 
         return result.affectedRows > 0;
     }
 
     static async getServiceById(id) {
-        const [result] = await db.execute(
-            `SELECT * FROM Services WHERE id = ?`, [id]
+        const [rows] = await db.execute(
+            `SELECT * FROM Services WHERE id = ?`,
+            [id]
         );
 
-        return result.length > 0 ? result[0] : null;
+        return rows.length > 0 ? rows[0] : null;
     }
 
-    static async getServices() {
-        const [result] = await db.execute(
-            `SELECT * FROM Services`
-        );
+    static async getServices(filters = {}) {
+        let sql = `SELECT * FROM Services`;
+        const params = [];
 
-        return result.length > 0 ? result : null;
+        if (filters.search) {
+            sql += ` WHERE (name LIKE ? OR id LIKE ?)`;
+            const searchTerm = `%${filters.search}%`;
+            params.push(searchTerm, searchTerm);
+        }
+
+        sql += ` ORDER BY name`;
+
+        const [rows] = await db.execute(sql, params);
+
+        return rows;
+    }
+
+    static async getActiveServices() {
+        return await this.getServices();
     }
 }
 
-export default MedicalService;
+export default MedicalServiceRepository;

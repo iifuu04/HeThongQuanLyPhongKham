@@ -1,13 +1,13 @@
 // Specialty.repository.js
-import db from './../../config/db.js'
+import db from '../../config/db.js';
 
-class Specialty {
+class SpecialtyRepository {
     static async createSpecialty(specialty) {
-        const {name, description} = specialty;
-        
+        const { name, description } = specialty;
+
         const [result] = await db.execute(
-            `INSERT INTO Specialties (name, establish_at, description, updated_at, is_deleted, status)
-            VALUES (?, NOW(), ?, NOW(), 0, 'ACTIVE')`,
+            `INSERT INTO Specialties (name, establish_at, description, is_deleted, status)
+            VALUES (?, CURDATE(), ?, 0, 'ACTIVE')`,
             [name, description]
         );
 
@@ -18,8 +18,10 @@ class Specialty {
         const fields = [];
         const values = [];
 
+        // Only allow updating these fields
+        const allowedFields = ['name', 'description', 'status'];
         for (const [key, value] of Object.entries(specialty)) {
-            if (value !== undefined) {
+            if (allowedFields.includes(key) && key !== 'id') {
                 fields.push(`${key} = ?`);
                 values.push(value);
             }
@@ -29,8 +31,8 @@ class Specialty {
 
         const sql = `
             UPDATE Specialties
-            SET updated_at = NOW(), ${fields.join(', ')}
-            WHERE id = ?
+            SET ${fields.join(', ')}
+            WHERE id = ? AND is_deleted = 0
         `;
 
         values.push(id);
@@ -42,7 +44,7 @@ class Specialty {
 
     static async deleteSpecialty(id) {
         const [result] = await db.execute(
-            `UPDATE Specialties SET is_deleted = 1, updated_at = NOW() WHERE id = ?`,
+            `UPDATE Specialties SET is_deleted = 1 WHERE id = ?`,
             [id]
         );
 
@@ -51,24 +53,46 @@ class Specialty {
 
     static async getSpecialtyById(id) {
         const [result] = await db.execute(
-            `SELECT * FROM Specialties WHERE id = ?`,
+            `SELECT * FROM Specialties WHERE id = ? AND is_deleted = 0`,
             [id]
         );
 
-        return result.length > 0 ? result : null;
+        return result.length > 0 ? result[0] : null;
     }
 
-    static async getSpecialties() {
+    static async getSpecialties(includeInactive = false) {
+        let sql = `SELECT * FROM Specialties WHERE is_deleted = 0`;
+        if (!includeInactive) {
+            sql += ` AND status = 'ACTIVE'`;
+        }
+        sql += ` ORDER BY name`;
+
+        const [result] = await db.execute(sql);
+
+        return result.length > 0 ? result : [];
+    }
+
+    static async getActiveByName(name) {
         const [result] = await db.execute(
-            `SELECT * FROM Specialties WHERE is_deleted != 1`
+            `SELECT * FROM Specialties WHERE name = ? AND status = 'ACTIVE' AND is_deleted = 0`,
+            [name]
         );
 
-        return result.length > 0 ? result : null;
+        return result.length > 0 ? result[0] : null;
+    }
+
+    static async getActiveByNameExcludingId(name, excludeId) {
+        const [result] = await db.execute(
+            `SELECT * FROM Specialties WHERE name = ? AND id != ? AND status = 'ACTIVE' AND is_deleted = 0`,
+            [name, excludeId]
+        );
+
+        return result.length > 0 ? result[0] : null;
     }
 
     static async lockSpecialty(id) {
         const [result] = await db.execute(
-            `UPDATE Specialties SET status = 'LOCKED', updated_at = NOW() WHERE id = ?`,
+            `UPDATE Specialties SET status = 'LOCKED' WHERE id = ? AND is_deleted = 0`,
             [id]
         );
 
@@ -77,12 +101,21 @@ class Specialty {
 
     static async unlockSpecialty(id) {
         const [result] = await db.execute(
-            `UPDATE Specialties SET status = 'ACTIVE', updated_at = NOW() WHERE id = ?`,
+            `UPDATE Specialties SET status = 'ACTIVE' WHERE id = ? AND is_deleted = 0`,
             [id]
         );
 
         return result.affectedRows > 0;
     }
+
+    static async hasLinkedDoctors(specialtyId) {
+        const [result] = await db.execute(
+            `SELECT COUNT(*) as count FROM Doctors WHERE specialty_id = ?`,
+            [specialtyId]
+        );
+
+        return result[0].count > 0;
+    }
 }
 
-export default Specialty;
+export default SpecialtyRepository;
