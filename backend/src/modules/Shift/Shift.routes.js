@@ -21,13 +21,13 @@ router.use(authenticateToken);
 
 // GET /api/shifts - Get all shifts
 // ADMIN, DOCTOR, RECEPTIONIST can view
-router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const shifts = await ShiftService.getAllShifts();
     return success(res, shifts, 'Lấy danh sách ca làm việc thành công');
 }));
 
 // GET /api/shifts/:id - Get shift by ID
-router.get('/:id', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/:id', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const shift = await ShiftService.getShiftById(req.params.id);
     if (!shift) {
         return notFound(res, 'Không tìm thấy ca làm việc');

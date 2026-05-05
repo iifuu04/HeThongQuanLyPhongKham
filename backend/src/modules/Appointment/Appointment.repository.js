@@ -20,20 +20,29 @@ class AppointmentRepository {
      * Checks:
      * 1. Work schedule exists and belongs to doctor
      * 2. Max patients not exceeded
-     * 3. No duplicate (doctor_id + work_schedule_id + start_time)
+     * 3. No duplicate doctor_id + work_schedule_id + start_time
+     * 
+     * Logic yêu cầu:
+     * Nếu 2 người cùng đặt 1 giờ, 1 bác sĩ:
+     * - Người bấm xác nhận trước sẽ được tạo lịch trước
+     * - Người bấm sau sẽ bị báo trùng lịch
      */
     static async createAppointmentWithTransaction(appointment) {
         const { patient_id, doctor_id, work_schedule_id, start_time, end_time } = appointment;
 
         const connection = await db.getConnection();
+
         try {
             await connection.beginTransaction();
 
-            // 1. Lock the work schedule row to prevent race conditions
-            // This ensures only one transaction can modify this schedule at a time
+            // 1. Khóa dòng Work_Schedules.
+            // Khi 2 người cùng xác nhận một lúc, transaction nào vào trước sẽ giữ khóa trước.
+            // Transaction còn lại phải chờ transaction đầu commit/rollback xong mới được kiểm tra tiếp.
             const [scheduleResult] = await connection.execute(
                 `SELECT ws.id, ws.doctor_id, ws.work_date, ws.shift_id,
-                        s.start_time AS shift_start_time, s.end_time AS shift_end_time, s.max_patients
+                        s.start_time AS shift_start_time,
+                        s.end_time AS shift_end_time,
+                        s.max_patients
                  FROM Work_Schedules ws
                  JOIN Shifts s ON ws.shift_id = s.id
                  WHERE ws.id = ? AND ws.doctor_id = ?
@@ -47,7 +56,7 @@ class AppointmentRepository {
 
             const schedule = scheduleResult[0];
 
-            // 2. Verify start_time is within shift time bounds
+            // 2. Kiểm tra giờ bắt đầu có nằm trong ca làm việc không
             const shiftStart = schedule.shift_start_time;
             const shiftEnd = schedule.shift_end_time;
 
@@ -58,11 +67,13 @@ class AppointmentRepository {
                 throw new Error('Giờ bắt đầu không nằm trong ca làm việc');
             }
 
-            // 3. Check max patients limit - count with lock held
-            // This count is accurate because we hold the lock
+            // 3. Kiểm tra ca khám đã đầy chưa
+            // Vì đang giữ khóa Work_Schedules nên count này an toàn hơn khi nhiều người đặt cùng lúc.
             const [countResult] = await connection.execute(
-                `SELECT COUNT(*) as count FROM Appointments
-                 WHERE work_schedule_id = ? AND status NOT IN ('CANCELLED')`,
+                `SELECT COUNT(*) AS count
+                 FROM Appointments
+                 WHERE work_schedule_id = ?
+                   AND status NOT IN ('CANCELLED')`,
                 [work_schedule_id]
             );
 
@@ -70,23 +81,28 @@ class AppointmentRepository {
                 throw new Error('Ca khám đã đầy, vui lòng chọn ca khác');
             }
 
-            // 4. Check for duplicate: doctor_id + work_schedule_id + start_time
-            // Only non-cancelled appointments count
+            // 4. Kiểm tra trùng giờ cùng bác sĩ.
+            // Người xác nhận trước insert thành công.
+            // Người xác nhận sau sẽ kiểm tra lại sau khi khóa được nhả và thấy conflict.
             const [conflictResult] = await connection.execute(
-                `SELECT id FROM Appointments
-                 WHERE doctor_id = ? AND work_schedule_id = ? AND start_time = ?
-                 AND status NOT IN ('CANCELLED')
+                `SELECT id
+                 FROM Appointments
+                 WHERE doctor_id = ?
+                   AND work_schedule_id = ?
+                   AND start_time = ?
+                   AND status NOT IN ('CANCELLED')
                  LIMIT 1`,
                 [doctor_id, work_schedule_id, start_time]
             );
 
             if (conflictResult.length > 0) {
-                throw new Error('Đã có lịch hẹn vào thời gian này với bác sĩ này');
+                throw new Error('Khung giờ này vừa được người khác xác nhận trước. Vui lòng chọn giờ khác.');
             }
 
-            // 5. Insert the appointment - let MySQL auto-increment handle id (INT)
+            // 5. Tạo lịch hẹn
             const [insertResult] = await connection.execute(
-                `INSERT INTO Appointments (patient_id, doctor_id, work_schedule_id, start_time, end_time, status, created_at, updated_at)
+                `INSERT INTO Appointments 
+                    (patient_id, doctor_id, work_schedule_id, start_time, end_time, status, created_at, updated_at)
                  VALUES (?, ?, ?, ?, ?, 'SCHEDULED', NOW(), NOW())`,
                 [patient_id, doctor_id, work_schedule_id, start_time, end_time]
             );
@@ -96,13 +112,24 @@ class AppointmentRepository {
             }
 
             const appointmentId = insertResult.insertId;
+
             await connection.commit();
 
             // Fetch and return the created appointment
             const created = await this.getAppointmentByIdWithConnection(connection, appointmentId);
-            return { success: true, data: created };
+
+            return {
+                success: true,
+                data: created,
+            };
         } catch (error) {
             await connection.rollback();
+
+            // Nếu đã chạy unique index ở database, lỗi duplicate cũng được đổi thành thông báo dễ hiểu.
+            if (error.code === 'ER_DUP_ENTRY') {
+                throw new Error('Khung giờ này vừa được người khác xác nhận trước. Vui lòng chọn giờ khác.');
+            }
+
             throw error;
         } finally {
             connection.release();
@@ -370,13 +397,19 @@ class AppointmentRepository {
      */
     static async checkSlotAvailability(workScheduleId, doctorId, startTime) {
         const connection = await db.getConnection();
+
         try {
             await connection.beginTransaction();
 
-            // Lock the schedule
+            // Khóa lịch làm việc để tránh race condition khi nhiều người kiểm tra cùng lúc.
             const [scheduleResult] = await connection.execute(
                 `SELECT s.max_patients,
-                        (SELECT COUNT(*) FROM Appointments WHERE work_schedule_id = ? AND status NOT IN ('CANCELLED')) as current_count
+                        (
+                            SELECT COUNT(*)
+                            FROM Appointments
+                            WHERE work_schedule_id = ?
+                              AND status NOT IN ('CANCELLED')
+                        ) AS current_count
                  FROM Work_Schedules ws
                  JOIN Shifts s ON ws.shift_id = s.id
                  WHERE ws.id = ? AND ws.doctor_id = ?
@@ -386,34 +419,57 @@ class AppointmentRepository {
 
             if (scheduleResult.length === 0) {
                 await connection.rollback();
-                return { available: false, reason: 'Lịch làm việc không tồn tại' };
+                return {
+                    available: false,
+                    reason: 'Lịch làm việc không tồn tại',
+                };
             }
 
             const { max_patients, current_count } = scheduleResult[0];
 
             if (current_count >= max_patients) {
                 await connection.rollback();
-                return { available: false, reason: 'Ca khám đã đầy' };
+                return {
+                    available: false,
+                    reason: 'Ca khám đã đầy',
+                };
             }
 
-            // Check for duplicate
+            // Kiểm tra trùng giờ cùng bác sĩ.
             const [conflictResult] = await connection.execute(
-                `SELECT id FROM Appointments
-                 WHERE doctor_id = ? AND work_schedule_id = ? AND start_time = ?
-                 AND status NOT IN ('CANCELLED')
+                `SELECT id
+                 FROM Appointments
+                 WHERE doctor_id = ?
+                   AND work_schedule_id = ?
+                   AND start_time = ?
+                   AND status NOT IN ('CANCELLED')
                  LIMIT 1`,
                 [doctorId, workScheduleId, startTime]
             );
 
             if (conflictResult.length > 0) {
                 await connection.rollback();
-                return { available: false, reason: 'Đã có lịch hẹn vào thời gian này' };
+                return {
+                    available: false,
+                    reason: 'Khung giờ này vừa được người khác xác nhận trước. Vui lòng chọn giờ khác.',
+                };
             }
 
             await connection.commit();
-            return { available: true };
+
+            return {
+                available: true,
+            };
         } catch (error) {
             await connection.rollback();
+
+            if (error.code === 'ER_DUP_ENTRY') {
+                return {
+                    available: false,
+                    reason: 'Khung giờ này vừa được người khác xác nhận trước. Vui lòng chọn giờ khác.',
+                };
+            }
+
             throw error;
         } finally {
             connection.release();

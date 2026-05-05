@@ -328,13 +328,19 @@ export function ClinicProvider({ children }) {
       // Normalize datetime values for MySQL DATETIME format
       const normalizeDateTimeForApi = (value) => {
         if (!value) return null;
-        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return value;
-        if (typeof value === 'string' && value.includes('T')) {
-          const date = new Date(value);
-          if (!isNaN(date.getTime())) {
-            return date.toISOString().slice(0, 19).replace('T', ' ');
-          }
+
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+          return value;
         }
+
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+          return `${value.replace('T', ' ')}:00`;
+        }
+
+        if (typeof value === 'string' && value.includes('T')) {
+          return value.replace('T', ' ').slice(0, 19);
+        }
+
         return value;
       };
 

@@ -21,7 +21,7 @@ router.use(authenticateToken);
 
 // GET /api/work-schedules - Get all work schedules with optional filters
 // ADMIN, DOCTOR, RECEPTIONIST can view
-router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const { doctor_id, work_date, specialty_id, clinic_id } = req.query;
     const filters = {};
     if (doctor_id) filters.doctor_id = doctor_id;
@@ -34,7 +34,7 @@ router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(
 }));
 
 // GET /api/work-schedules/:id - Get work schedule by ID
-router.get('/:id', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/:id', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const schedule = await WorkScheduleService.getScheduleById(req.params.id);
     if (!schedule) {
         return notFound(res, 'Không tìm thấy lịch làm việc');
@@ -43,13 +43,13 @@ router.get('/:id', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandl
 }));
 
 // GET /api/work-schedules/doctor/:doctorId - Get schedules by doctor
-router.get('/doctor/:doctorId', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/doctor/:doctorId', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const schedules = await WorkScheduleService.getSchedulesByDoctor(req.params.doctorId);
     return success(res, schedules, 'Lấy lịch làm việc theo bác sĩ thành công');
 }));
 
 // GET /api/work-schedules/date/:date - Get schedules by date
-router.get('/date/:date', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/date/:date', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const schedules = await WorkScheduleService.getSchedulesByDate(req.params.date);
     return success(res, schedules, 'Lấy lịch làm việc theo ngày thành công');
 }));

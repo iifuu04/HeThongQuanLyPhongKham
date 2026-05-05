@@ -101,15 +101,7 @@ CREATE TABLE Appointments (
     CONSTRAINT fk_Appointments_doctor_id        FOREIGN KEY (doctor_id)         REFERENCES Doctors(id)          ON DELETE SET NULL,
     CONSTRAINT fk_Appointments_work_schedule_id FOREIGN KEY (work_schedule_id)  REFERENCES Work_Schedules(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-CREATE TABLE Services (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    price DECIMAL(12,2) NOT NULL,
-    description TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+
 CREATE TABLE Appointment_Request (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
     apointment_id   INT,
@@ -192,3 +184,11 @@ CREATE TABLE Audit_Logs (
 
     CONSTRAINT fk_AuditLogs_user_id     FOREIGN KEY (user_id) REFERENCES Profiles(id)   ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE Appointments
+ADD COLUMN active_slot_key VARCHAR(100)
+GENERATED ALWAYS AS (
+  IF(status = 'CANCELLED', NULL, CONCAT(doctor_id, '#', work_schedule_id, '#', start_time))
+) STORED;
+
+CREATE UNIQUE INDEX uq_active_appointment_slot
+ON Appointments(active_slot_key);
