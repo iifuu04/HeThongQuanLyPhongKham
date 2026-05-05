@@ -71,26 +71,6 @@ export default function LoginPage() {
           {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
         </button>
       </form>
-
-      <div className="demo-box">
-        <strong>Tài khoản mẫu (mật khẩu: 123456)</strong>
-        <p className="muted" style={{ fontSize: '0.85em', marginBottom: '8px' }}>
-          Bấm để điền nhanh.
-        </p>
-        <div className="demo-grid">
-          {demoAccounts.map((item) => (
-            <button
-              key={item.username}
-              className="demo-user"
-              type="button"
-              onClick={() => setForm({ username: item.username, password: item.password })}
-            >
-              <span>{item.label}</span>
-              <small>{item.username}</small>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

@@ -72,8 +72,8 @@ router.get('/patient/:patientId', authorizeRoles('ADMIN', 'RECEPTIONIST', 'DOCTO
 }));
 
 // POST /api/bills - Create new bill
-// ADMIN, RECEPTIONIST only
-router.post('/', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+// RECEPTIONIST only
+router.post('/', authorizeRoles('RECEPTIONIST'), asyncHandler(async (req, res) => {
     const result = await BillService.createBill(req.body, req.user);
     if (result.success) {
         return created(res, result.data, 'Tạo hóa đơn thành công');
@@ -82,8 +82,8 @@ router.post('/', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (re
 }));
 
 // PUT /api/bills/:id - Update bill
-// ADMIN, RECEPTIONIST only
-router.put('/:id', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+// RECEPTIONIST only
+router.put('/:id', authorizeRoles('RECEPTIONIST'), asyncHandler(async (req, res) => {
     const result = await BillService.updateBill(req.params.id, req.body, req.user);
     if (result.success) {
         return updated(res, result.data, 'Cập nhật hóa đơn thành công');
@@ -92,8 +92,8 @@ router.put('/:id', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (
 }));
 
 // PATCH /api/bills/:id/pay - Confirm payment
-// ADMIN, RECEPTIONIST only
-router.patch('/:id/pay', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+// RECEPTIONIST only
+router.patch('/:id/pay', authorizeRoles('RECEPTIONIST'), asyncHandler(async (req, res) => {
     const result = await BillService.confirmPayment(req.params.id, req.body.paymentMethod, req.user);
     if (result.success) {
         return updated(res, result.data, 'Xác nhận thanh toán thành công');
@@ -102,8 +102,8 @@ router.patch('/:id/pay', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(a
 }));
 
 // POST /api/bills/:id/items - Add bill item
-// ADMIN, RECEPTIONIST only
-router.post('/:id/items', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+// RECEPTIONIST only
+router.post('/:id/items', authorizeRoles('RECEPTIONIST'), asyncHandler(async (req, res) => {
     const result = await BillService.addBillItem(req.params.id, req.body, req.user);
     if (result.success) {
         return created(res, result.data, 'Thêm dịch vụ thành công');
@@ -112,8 +112,8 @@ router.post('/:id/items', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(
 }));
 
 // PUT /api/bills/items/:itemId - Update bill item
-// ADMIN, RECEPTIONIST only
-router.put('/items/:itemId', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+// RECEPTIONIST only
+router.put('/items/:itemId', authorizeRoles('RECEPTIONIST'), asyncHandler(async (req, res) => {
     const result = await BillService.updateBillItem(req.params.itemId, req.body, req.user);
     if (result.success) {
         return updated(res, result.data, 'Cập nhật dịch vụ thành công');
@@ -122,8 +122,8 @@ router.put('/items/:itemId', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandl
 }));
 
 // DELETE /api/bills/items/:itemId - Delete bill item
-// ADMIN, RECEPTIONIST only
-router.delete('/items/:itemId', authorizeRoles('ADMIN', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+// RECEPTIONIST only
+router.delete('/items/:itemId', authorizeRoles('RECEPTIONIST'), asyncHandler(async (req, res) => {
     const result = await BillService.deleteBillItem(req.params.itemId, req.user);
     if (result.success) {
         return success(res, result.data, 'Xóa dịch vụ thành công');

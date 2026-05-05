@@ -25,7 +25,7 @@ export default function MedicalRecordsPage() {
 
   const currentDoctor = useMemo(() => db.doctors.find((item) => item.profile_id === user?.id), [db.doctors, user?.id]);
   const currentPatient = useMemo(() => db.patients.find((item) => item.profile_id === user?.id), [db.patients, user?.id]);
-  const canManageBilling = user?.role === 'ADMIN' || user?.role === 'RECEPTIONIST';
+  const canManageBilling = user?.role === 'RECEPTIONIST';
 
   const mappedRecords = useMemo(() => {
     return db.medicalRecords
@@ -328,7 +328,7 @@ export default function MedicalRecordsPage() {
                 ) : selectedRecord.status !== 'COMPLETED' ? (
                   <div className="empty-state">Cần hoàn tất bệnh án trước khi lập hóa đơn.</div>
                 ) : !canManageBilling ? (
-                  <div className="empty-state">Chưa có hóa đơn. Chỉ ADMIN/Lễ tân được lập hóa đơn.</div>
+                  <div className="empty-state">Chưa có hóa đơn. Chỉ Lễ tân được lập hóa đơn.</div>
                 ) : billingOpen ? (
                   <form onSubmit={createBillFromRecord} className="form-stack">
                     <div className="item-editor">
