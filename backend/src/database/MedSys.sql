@@ -1,6 +1,6 @@
-CREATE DATABASE IF NOT EXISTS MedSys;
+DROP DATABASE IF EXISTS MedSys;
+CREATE DATABASE MedSys CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE MedSys;
-
 
 CREATE TABLE Profiles (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -15,26 +15,26 @@ CREATE TABLE Profiles (
     phone           VARCHAR(11),
     address         VARCHAR(255),
     created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     is_deleted      BOOLEAN         DEFAULT FALSE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Specialties (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
     name            VARCHAR(255),
     establish_at    DATE,
     description     TEXT,
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     is_deleted      BOOLEAN         DEFAULT FALSE,
-    status          ENUM('ACTIVE', 'LOCKED')
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    status          ENUM('ACTIVE', 'LOCKED') DEFAULT 'ACTIVE'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Clinics (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
     location        VARCHAR(255),
     name            VARCHAR(255),
     is_reserve      BOOLEAN         DEFAULT FALSE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Shifts (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -42,30 +42,35 @@ CREATE TABLE Shifts (
     end_time        TIME,
     max_patients    INT             CHECK (max_patients > 0),
     created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Services (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
     name            VARCHAR(255),
     price           DECIMAL(15,2)   CHECK (price >= 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Doctors (
     id              VARCHAR(6)      PRIMARY KEY,
     profile_id      INT             UNIQUE,
     specialty_id    INT,
 
+    INDEX idx_Doctors_profile_id (profile_id),
+    INDEX idx_Doctors_specialty_id (specialty_id),
+
     CONSTRAINT fk_Doctors_profile_id      FOREIGN KEY (profile_id)    REFERENCES Profiles(id)       ON DELETE CASCADE,
     CONSTRAINT fk_Doctors_specialty_id    FOREIGN KEY (specialty_id)  REFERENCES Specialties(id)    ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Patients (
     id              VARCHAR(6)      PRIMARY KEY,
     profile_id      INT             UNIQUE,
 
+    INDEX idx_Patients_profile_id (profile_id),
+
     CONSTRAINT fk_Patients_profile_id     FOREIGN KEY (profile_id)    REFERENCES Profiles(id)       ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Work_Schedules (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -74,33 +79,50 @@ CREATE TABLE Work_Schedules (
     shift_id        INT,
     work_date       DATE,
     created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT uq_WorkSchedules_doctor_shift_date UNIQUE (doctor_id, shift_id, work_date),
+
+    INDEX idx_WorkSchedules_doctor_id (doctor_id),
+    INDEX idx_WorkSchedules_clinic_id (clinic_id),
+    INDEX idx_WorkSchedules_shift_id (shift_id),
 
     CONSTRAINT fk_WorkSchedules_doctor_id   FOREIGN KEY (doctor_id) REFERENCES Doctors(id)        ON DELETE CASCADE,
     CONSTRAINT fk_WorkSchedules_clinic_id   FOREIGN KEY (clinic_id) REFERENCES Clinics(id)        ON DELETE SET NULL,
     CONSTRAINT fk_WorkSchedules_shift_id    FOREIGN KEY (shift_id)  REFERENCES Shifts(id)         ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Appointments (
-    id              INT             PRIMARY KEY AUTO_INCREMENT,
-    patient_id      VARCHAR(6),
-    doctor_id       VARCHAR(6),
+    id               INT PRIMARY KEY AUTO_INCREMENT,
+    patient_id       VARCHAR(6),
+    doctor_id        VARCHAR(6),
     work_schedule_id INT,
-    start_time      DATETIME,
-    end_time        DATETIME,
-    created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    start_time       DATETIME,
+    end_time         DATETIME,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    status          ENUM('SCHEDULED', 'WAITING', 'INPROGRESS', 'CANCELLED', 'COMPLETED'),
+    status           ENUM('SCHEDULED', 'WAITING', 'INPROGRESS', 'CANCELLED', 'COMPLETED') DEFAULT 'SCHEDULED',
 
-    CONSTRAINT uq_Appointments_schedule_start   UNIQUE (work_schedule_id, start_time),
+    active_slot_key VARCHAR(100)
+    GENERATED ALWAYS AS (
+        IF(status = 'CANCELLED', NULL, CONCAT(doctor_id, '#', work_schedule_id, '#', start_time))
+    ) VIRTUAL,
 
-    CONSTRAINT fk_Appointments_patient_id       FOREIGN KEY (patient_id)        REFERENCES Patients(id)         ON DELETE SET NULL,
-    CONSTRAINT fk_Appointments_doctor_id        FOREIGN KEY (doctor_id)         REFERENCES Doctors(id)          ON DELETE SET NULL,
-    CONSTRAINT fk_Appointments_work_schedule_id FOREIGN KEY (work_schedule_id)  REFERENCES Work_Schedules(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    INDEX idx_Appointments_patient_id (patient_id),
+    INDEX idx_Appointments_doctor_id (doctor_id),
+    INDEX idx_Appointments_work_schedule_id (work_schedule_id),
+    UNIQUE INDEX uq_active_appointment_slot (active_slot_key),
+
+    CONSTRAINT fk_Appointments_patient_id
+        FOREIGN KEY (patient_id) REFERENCES Patients(id) ON DELETE SET NULL,
+
+    CONSTRAINT fk_Appointments_doctor_id
+        FOREIGN KEY (doctor_id) REFERENCES Doctors(id) ON DELETE SET NULL,
+
+    CONSTRAINT fk_Appointments_work_schedule_id
+        FOREIGN KEY (work_schedule_id) REFERENCES Work_Schedules(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Appointment_Request (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -116,6 +138,14 @@ CREATE TABLE Appointment_Request (
     response_at     DATETIME,
     status          ENUM('PENDING', 'REJECTED', 'APPROVED'),
 
+    INDEX idx_AppointmentRequest_apointment_id (apointment_id),
+    INDEX idx_AppointmentRequest_patient_id (patient_id),
+    INDEX idx_AppointmentRequest_doctor_id (doctor_id),
+    INDEX idx_AppointmentRequest_specialty_id (specialty_id),
+    INDEX idx_AppointmentRequest_shift_id (shift_id),
+    INDEX idx_AppointmentRequest_request_by (request_by),
+    INDEX idx_AppointmentRequest_response_by (response_by),
+
     CONSTRAINT fk_AppointmentRequest_apointment_id  FOREIGN KEY (apointment_id) REFERENCES Appointments(id)     ON DELETE SET NULL,
     CONSTRAINT fk_AppointmentRequest_patient_id     FOREIGN KEY (patient_id)    REFERENCES Patients(id)         ON DELETE SET NULL,
     CONSTRAINT fk_AppointmentRequest_doctor_id      FOREIGN KEY (doctor_id)     REFERENCES Doctors(id)          ON DELETE SET NULL,
@@ -123,7 +153,7 @@ CREATE TABLE Appointment_Request (
     CONSTRAINT fk_AppointmentRequest_shift_id       FOREIGN KEY (shift_id)      REFERENCES Shifts(id)           ON DELETE SET NULL,
     CONSTRAINT fk_AppointmentRequest_request_by     FOREIGN KEY (request_by)    REFERENCES Profiles(id)         ON DELETE SET NULL,
     CONSTRAINT fk_AppointmentRequest_response_by    FOREIGN KEY (response_by)   REFERENCES Profiles(id)         ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Medical_Records (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -136,13 +166,17 @@ CREATE TABLE Medical_Records (
     result          TEXT,
     prescription    TEXT,
     created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     status          ENUM('INCOMPLETE', 'COMPLETED'),
+
+    INDEX idx_MedicalRecords_patient_id (patient_id),
+    INDEX idx_MedicalRecords_doctor_id (doctor_id),
+    INDEX idx_MedicalRecords_appointment_id (appointment_id),
 
     CONSTRAINT fk_MedicalRecords_patient_id     FOREIGN KEY (patient_id)        REFERENCES Patients(id),
     CONSTRAINT fk_MedicalRecords_doctor_id      FOREIGN KEY (doctor_id)         REFERENCES Doctors(id),
     CONSTRAINT fk_MedicalRecords_appointment_id FOREIGN KEY (appointment_id)    REFERENCES Appointments(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Bills (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -154,9 +188,12 @@ CREATE TABLE Bills (
     payment_method  ENUM('CASH', 'BANKING', 'VISA'),
     status          ENUM('PENDING', 'COMPLETED'),
 
+    INDEX idx_Bills_medical_record_id (medical_record_id),
+    INDEX idx_Bills_updated_by (updated_by),
+
     CONSTRAINT fk_Bills_medical_record_id   FOREIGN KEY (medical_record_id) REFERENCES Medical_Records(id),
     CONSTRAINT fk_Bills_updated_by          FOREIGN KEY (updated_by)        REFERENCES Profiles(id)             ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Bill_Items (
     id              INT             PRIMARY KEY AUTO_INCREMENT,
@@ -165,14 +202,17 @@ CREATE TABLE Bill_Items (
     quantity        INT             CHECK (quantity > 0),
     price           DECIMAL(15,2)   CHECK (price > 0),
 
+    INDEX idx_BillItems_bill_id (bill_id),
+    INDEX idx_BillItems_service_id (service_id),
+
     CONSTRAINT fk_BillItems_bill_id     FOREIGN KEY (bill_id)       REFERENCES Bills(id),
     CONSTRAINT fk_BillItems_service_id  FOREIGN KEY (service_id)    REFERENCES Services(id)     ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE Audit_Logs (
     id              INT PRIMARY KEY AUTO_INCREMENT,
     user_id         INT,
-    action_type     ENUM('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT'),
+    action_type     ENUM('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'CANCEL'),
     table_name      VARCHAR(255),
     record_id       INT,
     old_data        TEXT,
@@ -182,13 +222,7 @@ CREATE TABLE Audit_Logs (
     user_agent      TEXT,
     created_at      DATETIME,
 
-    CONSTRAINT fk_AuditLogs_user_id     FOREIGN KEY (user_id) REFERENCES Profiles(id)   ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-ALTER TABLE Appointments
-ADD COLUMN active_slot_key VARCHAR(100)
-GENERATED ALWAYS AS (
-  IF(status = 'CANCELLED', NULL, CONCAT(doctor_id, '#', work_schedule_id, '#', start_time))
-) STORED;
+    INDEX idx_AuditLogs_user_id (user_id),
 
-CREATE UNIQUE INDEX uq_active_appointment_slot
-ON Appointments(active_slot_key);
+    CONSTRAINT fk_AuditLogs_user_id     FOREIGN KEY (user_id) REFERENCES Profiles(id)   ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
