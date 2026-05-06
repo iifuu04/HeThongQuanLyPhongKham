@@ -22,7 +22,7 @@ router.use(authenticateToken);
 
 // GET /api/medical-records - Get all medical records
 // ADMIN, DOCTOR, RECEPTIONIST can view all
-router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST'), asyncHandler(async (req, res) => {
+router.get('/', authorizeRoles('ADMIN', 'DOCTOR', 'RECEPTIONIST', 'PATIENT'), asyncHandler(async (req, res) => {
     const { doctor_id, patient_id, status } = req.query;
     const filters = {};
     if (doctor_id) filters.doctor_id = doctor_id;
